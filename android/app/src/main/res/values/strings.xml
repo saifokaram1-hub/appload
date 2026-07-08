@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Appload</string>
+    <string name="title_activity_main">Appload</string>
+    <string name="package_name">com.appload.app</string>
+    <string name="custom_url_scheme">com.appload.app</string>
+</resources>
