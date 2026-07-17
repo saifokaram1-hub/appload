@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import IconPicker from '../components/IconPicker';
 
 const STARTER = `<!doctype html>
 <html lang="de">
@@ -26,14 +27,44 @@ const STARTER = `<!doctype html>
 
 export default function CreateApp() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const editMode = !!id;
   const { session } = useAuth();
   const uid = session!.user.id;
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [icon, setIcon] = useState('📱');
+  const [iconBg, setIconBg] = useState('#c6a24c');
   const [code, setCode] = useState(STARTER);
+  const [isEditorApp, setIsEditorApp] = useState(true); // false = hochgeladene Datei
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(editMode);
+
+  useEffect(() => {
+    if (!editMode) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from('apps')
+        .select('name, description, icon, icon_bg, content, source')
+        .eq('id', id)
+        .maybeSingle();
+      if (error || !data) {
+        setError('App nicht gefunden oder kein Zugriff.');
+        setLoading(false);
+        return;
+      }
+      setName(data.name ?? '');
+      setDescription(data.description ?? '');
+      setIcon(data.icon ?? '📱');
+      setIconBg(data.icon_bg ?? '#c6a24c');
+      const editorApp = !!data.content || data.source === 'editor';
+      setIsEditorApp(editorApp);
+      if (data.content) setCode(data.content);
+      setLoading(false);
+    })();
+  }, [editMode, id]);
 
   async function save() {
     setError(null);
@@ -41,17 +72,35 @@ export default function CreateApp() {
       setError('Bitte gib deiner App einen Namen.');
       return;
     }
-    if (!code.trim()) {
+    if (isEditorApp && !code.trim()) {
       setError('Der Code ist leer.');
       return;
     }
     setBusy(true);
+
+    if (editMode) {
+      const patch: Record<string, unknown> = {
+        name,
+        description,
+        icon,
+        icon_bg: iconBg,
+      };
+      if (isEditorApp) patch.content = code;
+      const { error } = await supabase.from('apps').update(patch).eq('id', id);
+      setBusy(false);
+      if (error) return setError('Speichern fehlgeschlagen: ' + error.message);
+      navigate(`/app/run/${id}`);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('apps')
       .insert({
         owner_id: uid,
         name,
         description,
+        icon,
+        icon_bg: iconBg,
         content: code,
         source: 'editor',
         entry_file: 'index.html',
@@ -60,20 +109,21 @@ export default function CreateApp() {
       .select('id')
       .single();
     setBusy(false);
-    if (error) {
-      setError('Speichern fehlgeschlagen: ' + error.message);
-      return;
-    }
+    if (error) return setError('Speichern fehlgeschlagen: ' + error.message);
     navigate(`/app/run/${data.id}`);
   }
+
+  if (loading) return <p className="muted">Lädt…</p>;
 
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="row">
         <div>
-          <h1 style={{ fontSize: 28 }}>App erstellen</h1>
+          <h1 style={{ fontSize: 28 }}>{editMode ? 'App bearbeiten' : 'App erstellen'}</h1>
           <p style={{ fontSize: 15 }}>
-            Code direkt einfügen — links schreiben, rechts live sehen.
+            {isEditorApp
+              ? 'Code links schreiben, rechts live sehen. Name & Icon frei wählen.'
+              : 'Name & Icon dieser hochgeladenen App anpassen.'}
           </p>
         </div>
         <span className="spacer" />
@@ -87,62 +137,84 @@ export default function CreateApp() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div className="grid grid-2" style={{ alignItems: 'stretch' }}>
-        <div className="field">
-          <label>Name</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="grid grid-2" style={{ alignItems: 'start' }}>
+        <div className="stack">
+          <div className="field">
+            <label>Name der App</label>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Beschreibung (optional)</label>
+            <input
+              className="input"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
         </div>
-        <div className="field">
-          <label>Beschreibung (optional)</label>
-          <input
-            className="input"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+        <div className="card">
+          <div className="field" style={{ marginBottom: 10 }}>
+            <label>App-Icon</label>
+          </div>
+          <IconPicker
+            icon={icon}
+            bg={iconBg}
+            onChange={(i, b) => {
+              setIcon(i);
+              setIconBg(b);
+            }}
           />
         </div>
       </div>
 
-      <div className="grid grid-2" style={{ minHeight: 460 }}>
-        <div className="field" style={{ height: '100%' }}>
-          <label>Code (HTML / CSS / JS)</label>
-          <textarea
-            className="input"
-            spellCheck={false}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            style={{
-              flex: 1,
-              minHeight: 420,
-              fontFamily: 'ui-monospace, Consolas, monospace',
-              fontSize: 13,
-              lineHeight: 1.5,
-              background: '#1c1b18',
-              color: '#f3ead2',
-              resize: 'vertical',
-            }}
-          />
-        </div>
-        <div className="field" style={{ height: '100%' }}>
-          <label>Live-Vorschau</label>
-          <div
-            style={{
-              flex: 1,
-              minHeight: 420,
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              overflow: 'hidden',
-              background: '#fff',
-            }}
-          >
-            <iframe
-              title="Vorschau"
-              srcDoc={code}
-              sandbox="allow-scripts allow-forms allow-modals"
-              style={{ border: 'none', width: '100%', height: '100%' }}
+      {isEditorApp ? (
+        <div className="grid grid-2" style={{ minHeight: 460 }}>
+          <div className="field" style={{ height: '100%' }}>
+            <label>Code (HTML / CSS / JS)</label>
+            <textarea
+              className="input"
+              spellCheck={false}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              style={{
+                flex: 1,
+                minHeight: 420,
+                fontFamily: 'ui-monospace, Consolas, monospace',
+                fontSize: 13,
+                lineHeight: 1.5,
+                background: '#1c1b18',
+                color: '#f3ead2',
+                resize: 'vertical',
+              }}
             />
           </div>
+          <div className="field" style={{ height: '100%' }}>
+            <label>Live-Vorschau</label>
+            <div
+              style={{
+                flex: 1,
+                minHeight: 420,
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                overflow: 'hidden',
+                background: '#fff',
+              }}
+            >
+              <iframe
+                title="Vorschau"
+                srcDoc={code}
+                sandbox="allow-scripts allow-forms allow-modals"
+                style={{ border: 'none', width: '100%', height: '100%' }}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="alert alert-info">
+          Diese App wurde als Datei hochgeladen — der Inhalt wird nicht im Editor
+          bearbeitet. Name und Icon kannst du oben ändern.
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import AppIcon from '../components/AppIcon';
 
 type App = {
   id: string;
@@ -10,7 +11,8 @@ type App = {
   bundle_path: string | null;
   entry_file: string;
   status: string;
-  created_at: string;
+  icon: string;
+  icon_bg: string;
 };
 
 export default function Dashboard() {
@@ -38,11 +40,11 @@ export default function Dashboard() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <div className="row">
+      <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h1 style={{ fontSize: 28 }}>Meine Apps</h1>
           <p style={{ fontSize: 15 }}>
-            Erstelle eine App direkt im Editor oder lade eine fertige Datei hoch.
+            Erstelle beliebig viele Apps — jede mit eigenem Namen und Icon.
           </p>
         </div>
         <span className="spacer" />
@@ -68,24 +70,18 @@ export default function Dashboard() {
         <p className="muted">Lädt…</p>
       ) : apps.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-          <p>Noch keine App hochgeladen.</p>
+          <p>Noch keine App. Tippe auf „+ App erstellen".</p>
         </div>
       ) : (
-        <div className="grid grid-3">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
+            gap: 20,
+          }}
+        >
           {apps.map((a) => (
-            <div key={a.id} className="card stack" style={{ gap: 10 }}>
-              <div className="row">
-                <h3 style={{ fontSize: 17 }}>{a.name}</h3>
-                <span className="spacer" />
-                <StatusBadge status={a.status} />
-              </div>
-              <p style={{ fontSize: 14, minHeight: 20 }}>
-                {a.description || 'Keine Beschreibung'}
-              </p>
-              <Link to={`/app/run/${a.id}`} className="btn btn-outline btn-block">
-                Öffnen
-              </Link>
-            </div>
+            <HomeTile key={a.id} app={a} />
           ))}
         </div>
       )}
@@ -93,18 +89,35 @@ export default function Dashboard() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    pending: 'badge badge-yellow',
-    approved: 'badge badge-turquoise',
-    rejected: 'badge badge-pink',
-  };
-  const label: Record<string, string> = {
-    pending: 'In Prüfung',
-    approved: 'Freigegeben',
-    rejected: 'Abgelehnt',
-  };
-  return <span className={map[status] ?? 'badge badge-muted'}>{label[status] ?? status}</span>;
+function HomeTile({ app }: { app: App }) {
+  const navigate = useNavigate();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      <button
+        onClick={() => navigate(`/app/run/${app.id}`)}
+        title={app.name}
+        style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
+      >
+        <AppIcon icon={app.icon} bg={app.icon_bg} size={64} />
+      </button>
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          textAlign: 'center',
+          maxWidth: 92,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {app.name}
+      </div>
+      <Link to={`/app/edit/${app.id}`} style={{ fontSize: 12, color: 'var(--muted)' }}>
+        Bearbeiten
+      </Link>
+    </div>
+  );
 }
 
 function UploadForm({ uid, onDone }: { uid: string; onDone: () => void }) {
@@ -150,6 +163,8 @@ function UploadForm({ uid, onDone }: { uid: string; onDone: () => void }) {
       description,
       bundle_path: path,
       entry_file: isHtml ? file.name : 'index.html',
+      icon: '📦',
+      source: 'upload',
       status: 'pending',
     });
 
@@ -163,7 +178,7 @@ function UploadForm({ uid, onDone }: { uid: string; onDone: () => void }) {
 
   return (
     <form className="card stack" onSubmit={submit}>
-      <h3 style={{ fontSize: 17 }}>Neue App hochladen</h3>
+      <h3 style={{ fontSize: 17 }}>Datei hochladen</h3>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="field">
         <label>Name</label>
@@ -187,8 +202,7 @@ function UploadForm({ uid, onDone }: { uid: string; onDone: () => void }) {
           required
         />
         <span className="muted" style={{ fontSize: 12 }}>
-          Eine einzelne .html-Datei kann sofort geöffnet werden. .zip-Bundles
-          werden gespeichert (Ausführung folgt).
+          .html und .zip laufen direkt. Name & Icon kannst du danach über „Bearbeiten" anpassen.
         </span>
       </div>
       <button className="btn btn-gold btn-block" disabled={busy}>

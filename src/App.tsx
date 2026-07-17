@@ -41,6 +41,7 @@ export default function App() {
       >
         <Route path="/app" element={<Dashboard />} />
         <Route path="/app/create" element={<CreateApp />} />
+        <Route path="/app/edit/:id" element={<CreateApp />} />
         <Route
           path="/admin/users"
           element={
