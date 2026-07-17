@@ -42,12 +42,15 @@ export default function Dashboard() {
         <div>
           <h1 style={{ fontSize: 28 }}>Meine Apps</h1>
           <p style={{ fontSize: 15 }}>
-            Lade eine fertige App-Datei hoch und nutze sie direkt.
+            Erstelle eine App direkt im Editor oder lade eine fertige Datei hoch.
           </p>
         </div>
         <span className="spacer" />
-        <button className="btn btn-gold" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Schließen' : '+ App hochladen'}
+        <Link to="/app/create" className="btn btn-gold">
+          + App erstellen
+        </Link>
+        <button className="btn btn-outline" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? 'Schließen' : 'Datei hochladen'}
         </button>
       </div>
 
